@@ -1,5 +1,5 @@
 import pandas as pd
-from text2class import *
+from misc.text2class import *
 
 pd.options.display.max_rows = 500
 pd.options.display.max_columns = 1000

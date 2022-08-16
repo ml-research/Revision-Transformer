@@ -5,7 +5,7 @@ from nlgeval import NLGEval
 from tqdm import tqdm
 import torch
 from rtpt import RTPT
-from delphi import convert_moral_acceptability_text_to_class_wild_v11, get_moral_agreement_text_accuracy, \
+from misc.delphi import convert_moral_acceptability_text_to_class_wild_v11, get_moral_agreement_text_accuracy, \
     convert_moral_acceptability_text_to_class
 
 nlgeval = NLGEval(no_glove=True, no_skipthoughts=True)
