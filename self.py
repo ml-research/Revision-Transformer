@@ -26,6 +26,8 @@ parser.add_argument('--thresh', default=0.9, type=float,
                     help='threshold for retrieving neighbors')
 parser.add_argument('--baseline', default=False, type=bool,
                     help='compute results also for baseline? i.e. data without context')
+parser.add_argument('--version', default='', type=str, choices=['', 'agreement', 'acceptability', 'comparison'],
+                    help='which moral type in norms dataset?')
 
 
 # parser.add_argument('--dataset', default='norms', type=str,
@@ -35,18 +37,8 @@ parser.add_argument('--baseline', default=False, type=bool,
 
 def run_generation():
     dataloader = torch.utils.data.DataLoader(train_data, batch_size=1, shuffle=False, pin_memory=True, num_workers=0)
-    rtpt = RTPT(name_initials='FF', experiment_name='XIL_RET', max_iterations=len(dataloader))
+    rtpt = RTPT(name_initials='FF', experiment_name='RiT', max_iterations=len(dataloader))
     rtpt.start()
-
-    # suppress the generation of certain tokens, e.g. the underscore
-    # bad_words = ['????', '________', '__', '_____', '__________________________________________________', '??????',
-    #              '_________________________________________________', '____', '_______', 'Â', '¡', '¬',
-    #              '___________________________________________________', '_________________',
-    #              '______________________________________________________',
-    #              '________________________________________________', '________________________________________________']
-    # bad_words = ['Question']
-    # bad_words_ids = tokenizer(bad_words, add_special_tokens=False).input_ids
-    # force_words_ids = [tokenizer(['Yes', 'No'], add_special_tokens=False).input_ids]
 
     outputs = []
     for data in tqdm(dataloader):
@@ -65,8 +57,8 @@ def run_generation():
             inp = contextualize(data, args, model_sentence, contexts, retriever, thresh=0.9)
             if not inp:
                 output.extend([inp, ''])
-                continue
-            output = gen_answer(inp, output, tokenizer, model)
+            else:
+                output = gen_answer(inp, output, tokenizer, model)
 
         output.append(data['text_label'])
         outputs.append(output)
@@ -74,9 +66,9 @@ def run_generation():
 
     df = pd.DataFrame(outputs, columns=['Input', 'Prediction', 'Ground Truth'])
     if args.baseline:
-        df.to_csv(f'results/{args.set}/results_baseline.csv', sep='\t')
+        df.to_csv(f'results/{args.version}/{args.set}/results_baseline.csv', sep='\t')
     else:
-        df.to_csv(f'results/{args.set}/results_{args.filter}_{args.type}_knn{args.nn}.csv', sep='\t')
+        df.to_csv(f'results/{args.version}/{args.set}/results_{args.filter}_{args.type}_knn{args.nn}.csv', sep='\t')
 
 
 if __name__ == "__main__":
@@ -84,7 +76,7 @@ if __name__ == "__main__":
 
     torch.set_num_threads(60)
 
-    fname = f'/workspace/repositories/norms/retriever_processed_norms'
+    fname = f'/workspace/repositories/norms/{args.version}/retriever_processed_norms'
     if not args.filter:
         filt = '_unfiltered'
     else:

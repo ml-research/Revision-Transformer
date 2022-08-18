@@ -29,11 +29,13 @@ parser.add_argument('--nn', default=1, type=int,
                     help='how many neighbors to use a context?')
 parser.add_argument('--similarity', default=False, type=bool,
                     help='compute similarity?')
+parser.add_argument('--version', default='', type=str, choices=['', 'agreement', 'acceptability', 'comparison'],
+                    help='which moral type in norms dataset?')
 args = parser.parse_args()
 torch.set_num_threads(40)
 
-df = pd.read_csv(f'results/{args.set}/results_baseline.csv', sep='\t')
-df_ = pd.read_csv(f'results/{args.set}/results_{args.filter}_{args.type}_knn{args.nn}.csv', sep='\t')
+df = pd.read_csv(f'results/{args.version}/{args.set}/results_baseline.csv', sep='\t')
+df_ = pd.read_csv(f'results/{args.version}/{args.set}/results_{args.filter}_{args.type}_knn{args.nn}.csv', sep='\t')
 
 if args.similarity:
     model_names = ["sentence-transformers/sentence-t5-xl", "sentence-transformers/sentence-t5-xxl",
@@ -46,7 +48,7 @@ if args.similarity:
     similarities = []
     similarities_ = []
 
-rtpt = RTPT(name_initials='FF', experiment_name='XIL_RET', max_iterations=len(df))
+rtpt = RTPT(name_initials='FF', experiment_name='RiT_eval', max_iterations=len(df))
 rtpt.start()
 
 scores = []
@@ -62,7 +64,7 @@ if args.all:
             emb = model_sentence.encode([gt, pred, gt_, pred_], convert_to_tensor=True, device='cuda')
             sim_baseline = torch.cosine_similarity(emb[0], emb[1], dim=-1)
             similarities.append(sim_baseline)
-        if ~pred_.isnull().any():
+        if pred_:
             scores_.append(nlgeval.compute_individual_metrics([gt_], pred_))
             if args.similarity:
                 similarities_.append(torch.cosine_similarity(emb[2], emb[3], dim=-1))
@@ -89,7 +91,7 @@ df_scores = pd.DataFrame(scores, columns=['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4'
 mean_score = df_scores.mean(axis=0).round(4)
 df_scores_ = pd.DataFrame(scores_, columns=['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'METEOR', 'ROUGE_L', 'CIDEr'])
 mean_score_ = df_scores_.mean(axis=0).round(4)
-
+breakpoint()
 if args.similarity:
     mean_sim = torch.mean(torch.stack(similarities))
     mean_std = torch.std(torch.stack(similarities))
@@ -102,12 +104,12 @@ accuracy = get_moral_agreement_text_accuracy(df['Ground Truth'], df['Prediction'
 _, _, delphi_score_ = convert_moral_acceptability_text_to_class_wild_v11(df_['Ground Truth'], df_['Prediction'])
 accuracy_ = get_moral_agreement_text_accuracy(df_['Ground Truth'], df_['Prediction'])
 
-txt_file = open(f'results/{args.set}/eval_{args.filter}_{args.type}_knn{args.nn}.txt', 'w+')
+txt_file = open(f'results/{args.version}/{args.set}/eval_{args.filter}_{args.type}_knn{args.nn}.txt', 'w+')
 txt_file.write(f'NLG score:\n')
 txt_file.write(f'baseline: \n{mean_score} \n\n')
 txt_file.write(f'contextualized: \n{mean_score_} \n')
 
-txt_file.write(f'------------------------------------\n')
+txt_file.write(f'\n------------------------------------\n')
 txt_file.write(f'Delphi\n')
 txt_file.write(f'baseline: \ncov: {delphi_score:.3f} \n'
                f'acc_exact: {accuracy[0]:.3f} acc_polarity: {accuracy[1]:.3f}\n\n')
@@ -115,7 +117,7 @@ txt_file.write(f'contextualized: \ncov: {delphi_score_:.3f} \n'
                f'acc_exact: {accuracy_[0]:.3f} acc_polarity: {accuracy_[1]:.3f}\n')
 
 if args.similarity:
-    txt_file.write(f'------------------------------------\n')
+    txt_file.write(f'\n------------------------------------\n')
     txt_file.write(f'Similarity\n')
     txt_file.write(f'baseline: {mean_sim:.3f} +- {mean_std:.3f}\n')
     txt_file.write(f'contextualized: {mean_sim_:.3f}  +- {mean_std_:.3f}\n')
