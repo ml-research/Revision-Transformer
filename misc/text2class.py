@@ -1559,6 +1559,12 @@ def normalize_label(label):
         label = label.replace("shouldnt", "should not")
     if "don't" in label:
         label = label.replace("don't", "do not")
+    if "it's" in label:
+        label = label.replace("it's", "it is")
+    if "aren't" in label:
+        label = label.replace("aren't", "are not")
+    if "isn't" in label:
+        label = label.replace("isn't", "is not")
     if "doesn't" in label:
         label = label.replace("doesn't", "does not")
     if label.startswith("murder is"):
@@ -1567,7 +1573,6 @@ def normalize_label(label):
         label = label.replace("killing is", "it is")
     if label.startswith("that's "):
         label = label.replace("that's ", "it is ")
-
     if label.startswith("it is "):
         label = label.replace("it is ", "")
     return label
