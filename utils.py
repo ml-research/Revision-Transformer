@@ -7,6 +7,16 @@ from sklearn.metrics import balanced_accuracy_score
 from misc.text2class import *
 
 
+def compute_bertscore(bertscore, preds, refs, lang=''):
+    # use model_type='microsoft/deberta-xlarge-mnli' which works for any language or use lang=lang instead to use the
+    # best model for each language, at the expense of maybe being less comparable
+    results = bertscore.compute(predictions=preds, references=refs, lang=lang, batch_size=1000, verbose=True,
+                                model_type='microsoft/deberta-xlarge-mnli', device='cuda', nthreads=20)
+    # only use f1 score
+    results = torch.mean(torch.tensor(results['f1']))
+    return results
+
+
 def acc_yes_no(targets, preds):
     # TODO: instead of [0] check for ['yes', 'no']
     targets = targets.apply(nltk.word_tokenize).str[0]

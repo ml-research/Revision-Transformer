@@ -51,6 +51,7 @@ parser.add_argument('--model_name_sent', default='t5-xl', type=str,
                     choices=["t5-xl", "t5-xxl", "all-mpnet-base-v2", "gtr-t5-xxl", "gtr-t5-xl", "multilingual"],
                     help='model for context retrieval via sentence similarity')
 
+
 def print_rank0(*msg):
     if rank != 0:
         return
@@ -111,10 +112,10 @@ def run_generation():
     rtpt = RTPT(name_initials='FF', experiment_name='RiT_generate', max_iterations=len(dataloader))
     rtpt.start()
 
-
     print_rank0(f"*** Starting to generate {num_tokens} tokens with bs={args.batch_size}")
 
-    generate_kwargs = dict(max_new_tokens=num_tokens, do_sample=False, min_length=4, pad_token_id=tokenizer.eos_token_id)
+    generate_kwargs = dict(max_new_tokens=num_tokens, do_sample=False, min_length=4,
+                           pad_token_id=tokenizer.eos_token_id)
 
     print_rank0(f"Generate args {generate_kwargs}")
 
