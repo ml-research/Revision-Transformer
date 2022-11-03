@@ -16,8 +16,6 @@ parser.add_argument('--set', default='test', type=str, choices=['validation', 't
                     help='which set to evaluate?')
 parser.add_argument('--thresh', default=0.9, type=float,
                     help='threshold for retrieving neighbors')
-parser.add_argument('--filter', default=False, type=bool,
-                    help='only use true statements from dataset for context')
 parser.add_argument('--type', default='qna', type=str, choices=['plain', 'qna'],
                     help='context type, whether to use plain context or context in question answer style')
 parser.add_argument('--nn', default=1, type=int,
@@ -155,9 +153,9 @@ ngrams = [n_gram, n_gram_ctxt_base, n_gram_ctxt, n_gram_base_res]
 berts = [bert_score, bert_score_ctxt_base, bert_score_ctxt, bert_score_base_res]
 
 if args.simulate:
-    nm = f'/eval_{args.filter}_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}_simulateTrue.txt'
+    nm = f'/eval_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}_simulateTrue.txt'
 else:
-    nm = f'/eval_{args.filter}_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}.txt'
+    nm = f'/eval_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}.txt'
 
 txt_file = open(pth + nm, 'w+')
 txt_file.write(f'NLG evaluation:\n')
