@@ -8,6 +8,54 @@ from rtpt import RTPT
 from misc.text2class import normalize_label
 from utils import acc_yes_no, get_moral_agreement_text_accuracy
 
+from transformers import (
+    AutoTokenizer, FSMTForConditionalGeneration, MarianMTModel,
+    MarianTokenizer)
+
+class Translator:
+    def __init__(self, model_name, max_batch_tokens=1000):
+        self.max_batch_tokens = max_batch_tokens
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        if model_name.startswith("facebook"):
+            self.model = FSMTForConditionalGeneration.from_pretrained(model_name)
+        elif model_name.startswith("Helsinki") or model_name.startswith("gsarti"):
+            self.model = MarianMTModel.from_pretrained(model_name)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(self.device)
+
+    def __call__(self, sentences):
+        results = []
+        batch = []
+
+        def translate_batch():
+            max_len = max(len(sent) for sent in batch)
+            for sent in batch:
+                for _ in range(max_len - len(sent)):
+                    sent.append(tokenizer.pad_token)
+            id_batch = [tokenizer.convert_tokens_to_ids(sent) for sent in batch]
+            input_ids = torch.tensor(id_batch).to(device)
+            outputs = model.generate(input_ids)
+            for sent_out in outputs:
+                decoded = tokenizer.decode(sent_out, skip_special_tokens=True)
+                results.append(decoded)
+
+        for sent in sentences:
+            tokens = self.tokenizer.tokenize(sent)
+            tokens.append("</s>")
+            batch.append(tokens)
+
+            if len(batch) * max(len(sent) for sent in batch) > self.max_batch_tokens:
+                translate_batch()
+                batch = []
+
+        if batch:
+            translate_batch()
+
+        return results
+
+
 nlgeval = NLGEval(no_glove=True, no_skipthoughts=True)
 
 parser = argparse.ArgumentParser(description='XIL on Retriever')
@@ -34,6 +82,7 @@ parser.add_argument('--simulate', default=False, type=bool,
 parser.add_argument('--model_name', default='bloom-3b', type=str,
                     choices=["T0-3B", "T0pp", "t5-11b-ssm-tqa", "t5-3b", "t5-11b", "bloom-1b", "bloom-3b", "bloom-7b",
                              "bloom"])
+parser.add_atugment("--mt_model_name", type=str, default="facebook/wmt19-de-en")
 args = parser.parse_args()
 torch.set_num_threads(40)
 
@@ -50,7 +99,7 @@ else:
 df_gen = pd.read_csv(pth + nm, sep='\t', dtype=str)
 
 if args.lang and args.lang != 'en':
-    pass
+    translator = Translator(args.mt_model_name)
     # TODO: translate answers and GT to english
 
 if args.lang:
