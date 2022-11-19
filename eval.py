@@ -1,4 +1,3 @@
-from sentence_transformers import SentenceTransformer
 import pandas as pd
 import argparse
 from nlgeval import NLGEval
@@ -6,11 +5,10 @@ from tqdm import tqdm
 import torch
 from rtpt import RTPT
 from misc.text2class import normalize_label
-from utils import acc_yes_no, get_moral_agreement_text_accuracy
+from utils import acc_yes_no, get_moral_agreement_text_accuracy, compute_bertscore
+from evaluate import load
+from transformers import (AutoTokenizer, FSMTForConditionalGeneration, MarianMTModel)
 
-from transformers import (
-    AutoTokenizer, FSMTForConditionalGeneration, MarianMTModel,
-    MarianTokenizer)
 
 class Translator:
     def __init__(self, model_name, max_batch_tokens=1000):
@@ -56,6 +54,7 @@ class Translator:
         return results
 
 
+bertscore = load("bertscore")
 nlgeval = NLGEval(no_glove=True, no_skipthoughts=True)
 
 parser = argparse.ArgumentParser(description='XIL on Retriever')
@@ -63,14 +62,10 @@ parser.add_argument('--set', default='test', type=str, choices=['validation', 't
                     help='which set to evaluate?')
 parser.add_argument('--thresh', default=0.9, type=float,
                     help='threshold for retrieving neighbors')
-parser.add_argument('--filter', default=False, type=bool,
-                    help='only use true statements from dataset for context')
 parser.add_argument('--type', default='qna', type=str, choices=['plain', 'qna'],
                     help='context type, whether to use plain context or context in question answer style')
 parser.add_argument('--nn', default=1, type=int,
                     help='how many neighbors to use a context?')
-parser.add_argument('--similarity', default=False, type=bool,
-                    help='compute similarity?')
 parser.add_argument('--normalize', default=False, type=bool,
                     help='normalize labels?')
 parser.add_argument('--version', default='agreement', type=str, choices=['agreement', 'acceptability', 'comparison'],
@@ -100,22 +95,11 @@ df_gen = pd.read_csv(pth + nm, sep='\t', dtype=str)
 
 if args.lang and args.lang != 'en':
     translator = Translator(args.mt_model_name)
-    # TODO: translate answers and GT to english
 
 if args.lang:
     # remove part of output after newline and if NaN replace with empty string
     df['Prediction'] = df['Prediction'].apply(lambda x: x.split('\n', 1)[0] if isinstance(x, str) else '')
     df_gen['Prediction'] = df_gen['Prediction'].apply(lambda x: x.split('\n', 1)[0] if isinstance(x, str) else '')
-
-if args.similarity:
-    model_names = ["sentence-transformers/sentence-t5-xl", "sentence-transformers/sentence-t5-xxl",
-                   "all-mpnet-base-v2", "gtr-t5-xxl", "gtr-t5-xl"]
-    model_name = model_names[0]
-    model_name = 'models/' + model_name
-    model_sentence = SentenceTransformer(model_name)
-    model_sentence.cuda()
-    similarities = []
-    similarities_gen = []
 
 # # overlap of predicition with answer from context: ~72%
 # if args.type == 'qna' and args.nn == 1:
@@ -139,20 +123,13 @@ scores = []
 scores_ = []
 scores_gen = []
 
-# compute N-gram metrics and sentence embedding similarity
+# compute N-gram metrics
 for gt, pred, pred_gen, inp in tqdm(data_, total=len(df)):
     rtpt.step()
     score_baseline = nlgeval.compute_individual_metrics([gt], pred)
     scores.append(score_baseline)
-    if args.similarity:
-        emb = model_sentence.encode([gt, pred, pred_gen], convert_to_tensor=True,
-                                    device='cuda')
-        sim_baseline = torch.cosine_similarity(emb[0], emb[1], dim=-1)
-        similarities.append(sim_baseline)
     if pd.notna(inp) and inp:
         scores_gen.append(nlgeval.compute_individual_metrics([gt], pred_gen))
-        if args.similarity:
-            similarities_gen.append(torch.cosine_similarity(emb[0], emb[2], dim=-1))
 
 ###### split data ############
 # locate empty entries
@@ -167,7 +144,7 @@ df_base_res = df.loc[idx].copy().reset_index(drop=True)
 # TODO add _base to baseline scores
 
 cols = ['Bleu_1', 'Bleu_2', 'Bleu_3', 'Bleu_4', 'METEOR', 'ROUGE_L', 'CIDEr']
-# split performance, remove CIDEr as we how only one ground truth answer per prediction
+# remove CIDEr as we have only one ground truth answer per prediction
 n_gram = pd.DataFrame(scores, columns=cols).drop('CIDEr', axis=1)
 n_gram_gen = pd.DataFrame(scores_gen, columns=cols).drop('CIDEr', axis=1)
 n_gram_ctxt_base = n_gram.copy()
@@ -180,11 +157,14 @@ n_gram_ctxt_base = n_gram_ctxt_base.mean(axis=0).round(4)
 n_gram_ctxt = n_gram_gen.mean(axis=0).round(4)
 n_gram_base_res = n_gram_base_res.mean(axis=0).round(4)
 
-if args.similarity:
-    mean_sim = torch.mean(torch.stack(similarities))
-    mean_std = torch.std(torch.stack(similarities))
-    mean_sim_gen = torch.mean(torch.stack(similarities_gen))
-    mean_std_gen = torch.std(torch.stack(similarities_gen))
+# compute similarity based on bert score
+bert_score = compute_bertscore(bertscore, df['Prediction'], df['Ground Truth'])
+bert_score_ctxt_base = compute_bertscore(bertscore, df_ctxt_base['Prediction'], df_ctxt_base['Ground Truth'])
+bert_score_ctxt = compute_bertscore(bertscore, df_ctxt['Prediction'], df_ctxt['Ground Truth'])
+if sum(idx):
+    bert_score_base_res = compute_bertscore(bertscore, df_base_res['Prediction'], df_base_res['Ground Truth'])
+else:
+    bert_score_base_res = -1
 
 # compute yes no accuracy
 acc_yn = acc_yes_no(df['Ground Truth'].copy(), df['Prediction'].copy())
@@ -216,12 +196,12 @@ types = ['baseline', 'context with base', 'context only', 'residual baseline']
 yns = [acc_yn, acc_yn_ctxt_base, acc_yn_ctxt, acc_yn_base_res]
 pols = [acc_pol, acc_pol_ctxt_base, acc_pol_ctxt, acc_pol_base_res]
 ngrams = [n_gram, n_gram_ctxt_base, n_gram_ctxt, n_gram_base_res]
-# sims = [similarities, similarities, similarities_gen, similarities]
+berts = [bert_score, bert_score_ctxt_base, bert_score_ctxt, bert_score_base_res]
 
 if args.simulate:
-    nm = f'/eval_{args.filter}_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}_simulateTrue.txt'
+    nm = f'/eval_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}_simulateTrue.txt'
 else:
-    nm = f'/eval_{args.filter}_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}.txt'
+    nm = f'/eval_{args.type}_knn{args.nn}_thresh{args.thresh}_lang={args.lang}_{args.model_name}.txt'
 
 txt_file = open(pth + nm, 'w+')
 txt_file.write(f'NLG evaluation:\n')
@@ -231,8 +211,7 @@ for i in range(len(types)):
     txt_file.write(f'{types[i]}: \n')
     txt_file.write(f'acc_yn: {yns[i]:.4f}\n')
     txt_file.write(f'acc_pol: {pols[i]:.4f}\n')
-    txt_file.write(f'n_gram: \n{ngrams[i]} \n')
-    if args.similarity:
-        txt_file.write(f'similarity: \n{sims[i]:.4f} \n')
+    txt_file.write(f'f1_bert: {berts[i]:.4f}\n')
+    txt_file.write(f'\n{ngrams[i]} \n')
 
 txt_file.close()
