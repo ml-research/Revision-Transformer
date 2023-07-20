@@ -28,10 +28,12 @@ Get data from `/storage-01/ml-ffriedrich/repositories/datasets/norms/` or `https
 ## Citation
 If you like or use our work please cite us:
 ```bibtex
-@article{friedrich2022RiT,
-      title={Revision Transformers: Getting RiT of No-Nos}, 
+@inproceedings{friedrich2023RiT,
+      title={Revision Transformers: Instructing Language Models to Change their Values}, 
       author={Felix Friedrich and Wolfgang Stammer and Patrick Schramowski and Kristian Kersting},
-      year={2022},
-      journal={arXiv preprint arXiv:2210.10332}
+      year={2023},
+      keywords = {Transformer, Retriever, Revisions, Machine Ethics},
+      booktitle = {Proceedings of the 26th European Conference on Artificial Intelligence (ECAI)},
+      Url = {https://arxiv.org/pdf/2210.10332.pdf}
 }
 ```
