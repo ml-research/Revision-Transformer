@@ -25,6 +25,9 @@ Note, for the evaluation, both the baseline and RiT answers have to be generated
 ## Data
 Get data from `/storage-01/ml-ffriedrich/repositories/datasets/norms/` or `https://github.com/liweijiang/delphi/`
 
+## TODO
+There is already effort to realize RiT for multiple languages and can be found in the `_crosslingual` files
+
 ## Citation
 If you like or use our work please cite us:
 ```bibtex
